@@ -1,0 +1,317 @@
+@page "/nasa-quiz"
+@using BlazorWASM.Models
+@using BlazorWASM.Services
+@inject APIService ApiService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Space Explorer - Today's Space Quiz</PageTitle>
+
+<div class="container mt-4">
+    <h1 class="text-center mb-4">🚀 Space Explorer - Today's Space Quiz</h1>
+
+    @if (quizState == QuizState.Loading)
+    {
+        <div class="text-center">
+            <div class="loading-progress">
+                <svg>
+                    <circle cx="50%" cy="50%" r="40%" />
+                    <circle cx="50%" cy="50%" r="40%" />
+                </svg>
+            </div>
+            <div class="loading-progress-text">Loading today's picture...</div>
+        </div>
+    }
+    else if (quizState == QuizState.Error)
+    {
+        <div class="alert alert-danger text-center">
+            <h4>⚠️ Unable to Load Today's Quiz</h4>
+            <p>We couldn't fetch today's astronomy picture. Please try again later.</p>
+            <button class="btn btn-primary" @onclick="LoadQuizData">Try Again</button>
+        </div>
+    }
+    else if (quizState == QuizState.ReadyToStart)
+    {
+        <div class="text-center">
+            <div class="card mx-auto" style="max-width: 600px;">
+                <div class="card-body">
+                    <h2 class="card-title">🌟 @apodData?.Title</h2>
+                    <p class="card-text text-muted">@apodData?.Date</p>
+                    <p class="card-text">Ready to test your space knowledge with today's astronomy picture?</p>
+                    <button class="btn btn-primary btn-lg" @onclick="StartQuiz">
+                        🚀 Start Today's Quiz
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+    else if (quizState == QuizState.QuizInProgress)
+    {
+        <div class="row">
+            <div class="col-md-6">
+                @if (apodData?.MediaType == "image")
+                {
+                    <img src="@apodData.Url" alt="@apodData.Title" class="img-fluid rounded shadow" />
+                }
+                else
+                {
+                    <div class="alert alert-info">
+                        <h5>📹 Video Content</h5>
+                        <p>Today's APOD is a video and cannot be displayed in the quiz.</p>
+                    </div>
+                }
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="card-title">@apodData?.Title</h3>
+                        <h5 class="mt-4">@quizQuestion</h5>
+                        <div class="mt-3">
+                            @foreach (var answer in shuffledAnswers)
+                            {
+                                <button class="btn answer-button w-100 mb-2" @onclick="() => HandleAnswerSelection(answer)">
+                                    @answer
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else if (quizState == QuizState.QuizFinished)
+    {
+        <div class="row">
+            <div class="col-md-6">
+                @if (apodData?.MediaType == "image")
+                {
+                    <img src="@apodData.Url" alt="@apodData.Title" class="img-fluid rounded shadow" />
+                }
+                else
+                {
+                    <div class="alert alert-info">
+                        <h5>📹 Video Content</h5>
+                        <p>Today's APOD is a video and cannot be displayed in the quiz.</p>
+                    </div>
+                }
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="card-title">@apodData?.Title</h3>
+                        <h5 class="mt-4">@quizQuestion</h5>
+                        
+                        <!-- Show result message -->
+                        <div class="alert @(isCorrectAnswer ? "alert-success" : "alert-danger") mt-3">
+                            <h5>@(isCorrectAnswer ? "🎉 Correct!" : "❌ Incorrect!")</h5>
+                        </div>
+
+                        <!-- Show answer options with visual feedback -->
+                        <div class="mt-3">
+                            @foreach (var answer in shuffledAnswers)
+                            {
+                                <button class="btn w-100 mb-2 @GetAnswerButtonClass(answer)" disabled>
+                                    @answer
+                                </button>
+                            }
+                        </div>
+
+                        <!-- Show full explanation -->
+                        <div class="mt-4">
+                            <h6>📖 Full Explanation:</h6>
+                            <p class="text-muted">@apodData?.Explanation</p>
+                        </div>
+
+                        <!-- Play again button -->
+                        <div class="text-center mt-4">
+                            <button class="btn btn-primary" @onclick="ResetQuiz">
+                                🔄 Play Again
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    // NASA API Key
+    private const string NASA_API_KEY = "tebXSUjhbPp3c9UOnC9310xpefDlEZLZsbqhiYZf";
+
+    // Quiz state management
+    private QuizState quizState = QuizState.Loading;
+    private ApodData? apodData;
+    
+    // Quiz data
+    private string quizQuestion = "Which statement accurately describes this image?";
+    private List<string> shuffledAnswers = new();
+    private string correctAnswer = string.Empty;
+    private string selectedAnswer = string.Empty;
+    private bool isCorrectAnswer = false;
+
+    // Quiz state enum
+    public enum QuizState
+    {
+        Loading,
+        ReadyToStart,
+        QuizInProgress,
+        QuizFinished,
+        Error
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadQuizData();
+    }
+
+    /// <summary>
+    /// Loads the APOD data from NASA API
+    /// </summary>
+    private async Task LoadQuizData()
+    {
+        quizState = QuizState.Loading;
+        StateHasChanged();
+
+        try
+        {
+            apodData = await ApiService.GetNasaApodAsync(NASA_API_KEY);
+            
+            if (apodData != null)
+            {
+                quizState = QuizState.ReadyToStart;
+            }
+            else
+            {
+                quizState = QuizState.Error;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading quiz data: {ex.Message}");
+            quizState = QuizState.Error;
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Starts the quiz by generating questions and answers
+    /// </summary>
+    private void StartQuiz()
+    {
+        if (apodData == null) return;
+
+        // Generate the correct answer from the first sentence of the explanation
+        correctAnswer = GetFirstSentence(apodData.Explanation);
+
+        // Generate incorrect answers (distractors)
+        var incorrectAnswers = GenerateDistractors();
+
+        // Create the full list of answers and shuffle them
+        var allAnswers = new List<string> { correctAnswer };
+        allAnswers.AddRange(incorrectAnswers);
+        shuffledAnswers = ShuffleList(allAnswers);
+
+        quizState = QuizState.QuizInProgress;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Handles when a user selects an answer
+    /// </summary>
+    private void HandleAnswerSelection(string answer)
+    {
+        selectedAnswer = answer;
+        isCorrectAnswer = answer == correctAnswer;
+        quizState = QuizState.QuizFinished;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Resets the quiz to the ready-to-start state
+    /// </summary>
+    private void ResetQuiz()
+    {
+        selectedAnswer = string.Empty;
+        isCorrectAnswer = false;
+        shuffledAnswers.Clear();
+        quizState = QuizState.ReadyToStart;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Extracts the first sentence from the explanation text
+    /// </summary>
+    private string GetFirstSentence(string explanation)
+    {
+        if (string.IsNullOrEmpty(explanation)) return "This image shows an astronomical phenomenon.";
+
+        // Find the first sentence ending with a period, exclamation, or question mark
+        var sentences = explanation.Split(new char[] { '.', '!', '?' }, StringSplitOptions.RemoveEmptyEntries);
+        if (sentences.Length > 0)
+        {
+            return sentences[0].Trim() + ".";
+        }
+
+        // Fallback: take first 100 characters if no sentence ending found
+        return explanation.Length > 100 ? explanation.Substring(0, 100) + "..." : explanation;
+    }
+
+    /// <summary>
+    /// Generates three plausible but incorrect answers
+    /// </summary>
+    private List<string> GenerateDistractors()
+    {
+        var distractors = new List<string>
+        {
+            "This image captures a distant galaxy cluster with gravitational lensing effects visible around the edges.",
+            "This photograph shows a planetary nebula formed by a dying star expelling its outer layers into space.",
+            "This image depicts a binary star system where material is being transferred between two stellar companions.",
+            "This photograph captures the collision of two neutron stars creating ripples in spacetime.",
+            "This image shows a supermassive black hole actively feeding on surrounding matter and gas.",
+            "This photograph depicts the formation of new stars within a dense molecular cloud region.",
+            "This image captures the aurora phenomena caused by solar wind interacting with Earth's magnetosphere.",
+            "This photograph shows a comet's tail as it approaches the inner solar system and heats up.",
+            "This image depicts the rings of Saturn with detailed structure visible in the ice particles.",
+            "This photograph captures a lunar eclipse with Earth's shadow creating the reddish coloration."
+        };
+
+        // Randomly select 3 distractors
+        var random = new Random();
+        return distractors.OrderBy(x => random.Next()).Take(3).ToList();
+    }
+
+    /// <summary>
+    /// Shuffles a list using Fisher-Yates algorithm
+    /// </summary>
+    private List<T> ShuffleList<T>(List<T> list)
+    {
+        var random = new Random();
+        var shuffled = new List<T>(list);
+        
+        for (int i = shuffled.Count - 1; i > 0; i--)
+        {
+            int j = random.Next(i + 1);
+            (shuffled[i], shuffled[j]) = (shuffled[j], shuffled[i]);
+        }
+        
+        return shuffled;
+    }
+
+    /// <summary>
+    /// Gets the appropriate CSS class for answer buttons based on quiz state
+    /// </summary>
+    private string GetAnswerButtonClass(string answer)
+    {
+        if (quizState != QuizState.QuizFinished)
+            return "answer-button";
+
+        if (answer == correctAnswer)
+            return "answer-button correct";
+        
+        if (answer == selectedAnswer && !isCorrectAnswer)
+            return "answer-button incorrect";
+        
+        return "answer-button";
+    }
+}

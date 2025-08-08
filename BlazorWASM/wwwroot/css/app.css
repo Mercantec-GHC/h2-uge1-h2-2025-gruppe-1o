@@ -112,3 +112,37 @@ code {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* Space Quiz Styles */
+.answer-button {
+    background-color: #f8f9fa;
+    border: 2px solid #dee2e6;
+    color: #495057;
+    transition: all 0.3s ease;
+    text-align: left;
+    padding: 12px 16px;
+}
+
+.answer-button:hover:not(:disabled) {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.answer-button.correct {
+    background-color: #d4edda;
+    border-color: #28a745;
+    color: #155724;
+}
+
+.answer-button.incorrect {
+    background-color: #f8d7da;
+    border-color: #dc3545;
+    color: #721c24;
+}
+
+.answer-button:disabled {
+    opacity: 0.8;
+    cursor: not-allowed;
+}
